@@ -2,12 +2,26 @@ from flask import Flask, render_template, request, jsonify
 import speech_recognition as sr
 import subprocess
 import os
+from controller.dao import ColaDAO
+
+colas = ColaDAO()
 
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    if request.method == 'POST':
+        resultado = colas.quitar()
+        if not resultado:
+            return "No hay elementos en la cola"
+    return render_template('index.html', cola=colas.retornar())
+
+@app.route('/cola', methods=['GET'])
+def obtener_cola():
+    return jsonify(colas.retornar())
+
+
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
@@ -27,6 +41,7 @@ def transcribe():
     try:
         subprocess.run([ffmpeg_path, '-y', '-i', input_path, output_path], check=True)
         print("Conversión a WAV exitosa")
+        print(colas.retornar())
     except subprocess.CalledProcessError as e:
         print("Error al convertir:", e)
         return jsonify({'error': f'Error converting audio: {e}'}), 400
@@ -37,6 +52,7 @@ def transcribe():
             audio = recognizer.record(source)
             text = recognizer.recognize_google(audio)
             print("Texto reconocido:", text)
+            colas.agregar(text)
     except sr.UnknownValueError:
         text = "No se entendió el audio."
     except sr.RequestError as e:
@@ -48,6 +64,8 @@ def transcribe():
     os.remove(output_path)
 
     return jsonify({'text': text})
+    
+
 
 if __name__ == '__main__':
     app.run(debug=True)
